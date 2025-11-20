@@ -175,6 +175,29 @@ async def chat_completions(request: ChatCompletionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def format_messages_for_perplexity(messages: List[Dict]) -> str:
+    """
+    Format a list of messages into a single query string for Perplexity.
+    This preserves the context of the conversation.
+    """
+    if not messages:
+        return ""
+
+    # If there's only one message, return it directly
+    if len(messages) == 1:
+        return messages[0]["content"]
+
+    # Otherwise format as a conversation
+    formatted_history = []
+    for msg in messages:
+        role = msg["role"].capitalize()
+        content = msg["content"]
+        formatted_history.append(f"{role}: {content}")
+
+    # Join with newlines
+    return "\n".join(formatted_history)
+
+
 async def generate_chat_completion(messages: List[Dict], request: ChatCompletionRequest, backend: str, model: str):
     """Generate a non-streaming chat completion."""
     try:
@@ -184,8 +207,8 @@ async def generate_chat_completion(messages: List[Dict], request: ChatCompletion
             # Use Perplexity client
             client = perplexity.Client(cookies=config.perplexity_cookies)
             
-            # Extract the user query (last message)
-            query = messages[-1]["content"]
+            # Format the full conversation history
+            query = format_messages_for_perplexity(messages)
             
             # Determine mode based on model
             mode = "auto"
@@ -252,7 +275,7 @@ async def stream_chat_completion(messages: List[Dict], request: ChatCompletionRe
         if backend == "perplexity":
             # Use Perplexity client (note: may not support streaming in all modes)
             client = perplexity.Client(cookies=config.perplexity_cookies)
-            query = messages[-1]["content"]
+            query = format_messages_for_perplexity(messages)
             
             mode = "auto"
             if "pro" in model:
