@@ -1,3 +1,6 @@
 curl_cffi
 litellm
 openai
+fastapi
+uvicorn
+websocket-client

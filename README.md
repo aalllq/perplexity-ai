@@ -1,6 +1,6 @@
 # Perplexity AI
 
-Perplexity AI is a Python module that leverages [Emailnator](https://emailnator.com/) to generate new accounts for unlimited pro queries. It supports both synchronous and asynchronous APIs, as well as a web interface for users who prefer a GUI-based approach. **Now with integrated support for LiteLLM and OpenAI API!**
+Perplexity AI is a Python module that leverages [Emailnator](https://emailnator.com/) to generate new accounts for unlimited pro queries. It supports both synchronous and asynchronous APIs, as well as a web interface for users who prefer a GUI-based approach. **Now with integrated support for LiteLLM and OpenAI API, plus an OpenAI-compatible API server!**
 
 ## Features
 
@@ -10,6 +10,8 @@ Perplexity AI is a Python module that leverages [Emailnator](https://emailnator.
 - **API Support**: Synchronous and asynchronous APIs for programmatic access.
 - **LiteLLM Integration**: Unified interface to 100+ LLM APIs (OpenAI, Anthropic, Cohere, etc.)
 - **OpenAI API Support**: Direct integration with OpenAI's GPT models.
+- **OpenAI-Compatible API Server**: Run Perplexity as an OpenAI-compatible REST API server.
+- **LiteLLM Provider**: Use Perplexity as a custom provider in LiteLLM.
 - **Enhanced Error Handling**: Comprehensive error handling for API failures.
 
 ## Installation
@@ -465,6 +467,226 @@ You can also pass API keys directly when initializing clients for better securit
 client = perplexity.OpenAIClient(api_key="sk-...")
 # or
 client = perplexity.LiteLLMClient(api_key="sk-...", model="gpt-4")
+```
+
+## OpenAI-Compatible API Server
+
+Run Perplexity AI as an OpenAI-compatible REST API server. This allows you to use Perplexity with any OpenAI client library!
+
+### Starting the Server
+
+```bash
+# Start with Perplexity backend (default)
+python api_server.py --host 0.0.0.0 --port 8000 --backend perplexity
+
+# Start with LiteLLM backend
+python api_server.py --host 0.0.0.0 --port 8000 --backend litellm
+
+# Start with OpenAI backend
+python api_server.py --host 0.0.0.0 --port 8000 --backend openai
+
+# Enable auto-reload for development
+python api_server.py --reload
+```
+
+### Server Configuration
+
+Set the backend using environment variable:
+
+```bash
+export PERPLEXITY_BACKEND=perplexity  # or litellm, or openai
+export OPENAI_API_KEY=sk-your-key-here  # for litellm/openai backends
+python api_server.py
+```
+
+### Using with OpenAI Python Client
+
+Once the server is running, you can use it with the official OpenAI Python client:
+
+```python
+from openai import OpenAI
+
+# Connect to your Perplexity API server
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key="not-needed"  # API key not required for local server
+)
+
+# Use it like the official OpenAI API
+response = client.chat.completions.create(
+    model="perplexity-auto",  # or perplexity-pro, perplexity-reasoning
+    messages=[
+        {"role": "user", "content": "What is quantum computing?"}
+    ]
+)
+
+print(response.choices[0].message.content)
+
+# Streaming example
+stream = client.chat.completions.create(
+    model="perplexity-pro",
+    messages=[{"role": "user", "content": "Explain AI"}],
+    stream=True
+)
+
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+```
+
+### Using with cURL
+
+```bash
+# Non-streaming request
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "perplexity-auto",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+
+# Streaming request
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "perplexity-pro",
+    "messages": [{"role": "user", "content": "Explain ML"}],
+    "stream": true
+  }'
+
+# List available models
+curl http://localhost:8000/v1/models
+```
+
+### Available Models
+
+When using the Perplexity backend:
+- `perplexity-auto` - Auto mode (default)
+- `perplexity-pro` - Pro mode with advanced models
+- `perplexity-reasoning` - Reasoning mode
+- `perplexity-labs-r1` - Labs R1 model
+
+When using LiteLLM or OpenAI backends, use standard model names like `gpt-3.5-turbo`, `gpt-4`, etc.
+
+### API Endpoints
+
+- `POST /v1/chat/completions` - Create chat completion (OpenAI-compatible)
+- `GET /v1/models` - List available models
+- `GET /health` - Health check
+- `GET /` - API information
+
+## Using Perplexity as a LiteLLM Provider
+
+Integrate Perplexity AI directly into LiteLLM as a custom provider.
+
+### Setup
+
+```python
+from perplexity.litellm_adapter import register_perplexity_provider
+import litellm
+
+# Register Perplexity as a LiteLLM provider
+register_perplexity_provider()
+
+# Now use it through LiteLLM
+response = litellm.completion(
+    model="perplexity-auto",
+    messages=[{"role": "user", "content": "What is machine learning?"}]
+)
+
+print(response.choices[0].message.content)
+```
+
+### With LiteLLM Proxy
+
+1. Start the Perplexity API server:
+```bash
+python api_server.py --port 8000
+```
+
+2. Use the provided LiteLLM proxy configuration:
+```bash
+litellm --config litellm_proxy_config.yaml
+```
+
+3. The LiteLLM proxy will route requests to your Perplexity server:
+```python
+import litellm
+
+# LiteLLM will use the proxy configuration
+response = litellm.completion(
+    model="perplexity/auto",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+### Benefits of LiteLLM Integration
+
+- **Unified Interface**: Use the same code for 100+ LLM providers
+- **Fallbacks**: Automatically fallback to other providers if one fails
+- **Load Balancing**: Distribute requests across multiple providers
+- **Caching**: Cache responses to reduce costs and latency
+- **Logging**: Built-in logging and monitoring
+- **Cost Tracking**: Track costs across all providers
+
+## Docker Support
+
+You can run the API server in Docker:
+
+```dockerfile
+# Dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8000
+CMD ["python", "api_server.py", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+Build and run:
+```bash
+docker build -t perplexity-api .
+docker run -p 8000:8000 -e OPENAI_API_KEY=sk-your-key perplexity-api
+```
+
+## Integration Examples
+
+### With LangChain
+
+```python
+from langchain.chat_models import ChatOpenAI
+from langchain.schema import HumanMessage
+
+# Use your Perplexity API server
+chat = ChatOpenAI(
+    openai_api_base="http://localhost:8000/v1",
+    openai_api_key="not-needed",
+    model_name="perplexity-auto"
+)
+
+messages = [HumanMessage(content="What is LangChain?")]
+response = chat(messages)
+print(response.content)
+```
+
+### With LlamaIndex
+
+```python
+from llama_index.llms import OpenAI
+
+# Use your Perplexity API server
+llm = OpenAI(
+    api_base="http://localhost:8000/v1",
+    api_key="not-needed",
+    model="perplexity-auto"
+)
+
+response = llm.complete("What is LlamaIndex?")
+print(response)
 ```
 
 ## License
